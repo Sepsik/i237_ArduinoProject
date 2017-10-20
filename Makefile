@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# Simple Makefile for Arduino MEGA 2560 C projects
+# Simple Makefile for Anita's Arduino NANO ATmega328p C projects
 #
 ###############################################################################
 
@@ -12,7 +12,7 @@ CODE_FORMATTER = tooling/format-code.sh
 AVRSIZE = avr-size
 
 # Microcontroller type and CPU frequency
-MCU = atmega2560
+MCU = atmega328p
 MCU_CPU_FREQ = 16000000UL
 
 # Firmware version from git describe
@@ -24,12 +24,12 @@ TARGET = $(BINDIR)/$(MCU)-user-code.ihx
 ELF = $(BINDIR)/$(MCU)-user-code.elf
 
 # Blank firmware which can be used to "erase" user code
-BLANK_FW = tooling/atemega2560-blank-user-code/bin/atmega2560-user-code-blank.ihx
+BLANK_FW = tooling/$(MCU)-blank-user-code/bin/$(MCU)-user-code-blank.ihx
 
 # Arduino device file defaults to /dev/ttyACM0
 # Use shell command export to define alternative device file
 # Example: export ARDUINO=/dev/ttyACM0
-ARDUINO ?= /dev/ttyACM0
+export ARDUINO = /dev/cu.usbserial-A601VSFF
 
 # Source files. wildcard "uses" all .c files in src and lib directory
 SRCDIR = src
@@ -76,10 +76,10 @@ OBJCOPYARGS =	-O ihex \
 # FIXME Find out why some Arduinos require -D to write user code.
 # Do not check device signature (-F)
 AVRDUDEARGS =	-p $(MCU) \
-				-c wiring \
+				-c arduino \
 				-F \
 				-P $(ARDUINO) \
-				-b 115200 \
+				-b 57600 \
 				-D
 
 AVRSIZEARGS =	-C \
