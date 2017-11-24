@@ -4,6 +4,10 @@
 #include <avr/io.h>
 #include <util/delay.h>
 #include "uart.h"
+#include "hmi_msg.h"
+#include "print_helper.h"
+#include "../lib/hd44780_111/hd44780.h"
+
 
 #define BLINK_DELAY_MS 300
 
@@ -27,6 +31,13 @@ static inline void init_errcon(void)
             FW_VERSION, __DATE__, __TIME__);
     fprintf(stderr, "avr-libc version: %s avr-gcc version: %s\n",
             __AVR_LIBC_VERSION_STRING__, __VERSION__);
+}
+
+
+static inline void init_uart0(void) 
+{
+    simple_uart0_init();
+    stdout = stdin = &simple_uart0_io;
 }
 
 
@@ -61,8 +72,41 @@ void main (void)
 {
     init_leds();
     init_errcon();
+    init_uart0();
+    lcd_init();
+    lcd_home();
+        
+    unsigned char char_array[128];
+
+    for (unsigned char i = 0; i < sizeof(char_array); i++) 
+    {
+        char_array[i] = i;
+    }
+
+    fprintf(stdout, "%s\n", my_name);
+    print_ascii_tbl(stdout);
+    print_for_human(stdout, char_array, sizeof(char_array));
+
+    lcd_puts(my_name);
 
     while (1) {
         blink_leds();
+
+        int input;
+        fprintf(stdout, "\nEnter number > ");
+        fscanf(stdin, "%s", &input);
+        fprintf(stdout, "%s\n", &input);
+
+        if (input > 57 || input < 48)
+        {
+            fprintf(stdout, "Please enter number between 0 and 9!\n");
+        }
+        else 
+        {
+            fprintf(stdout, "You entered number %s.\n", lookup_list[input-48]);
+            lcd_clr(64, 16);
+            lcd_goto(LCD_ROW_2_START);
+            lcd_puts(lookup_list[input-48]);
+        }
     }
 }
