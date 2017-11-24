@@ -10,8 +10,9 @@
 
 static inline void init_leds(void)
 {
+    DDRB |= _BV(DDB0);
+    DDRB |= _BV(DDB1);
     DDRB |= _BV(DDB2);
-    DDRB |= _BV(DDB4);
     DDRB |= _BV(DDB5);
     DDRB |= _BV(DDB7);
 }
@@ -42,15 +43,15 @@ static inline void blink_leds(void)
 {
     switch (rand() % 3) {
     case 0:
-        blink_led(PORTB2);
+        blink_led(PORTB0);
         break;
 
     case 1:
-        blink_led(PORTB4);
+        blink_led(PORTB1);
         break;
 
     case 2:
-        blink_led(PORTB5);
+        blink_led(PORTB2);
         break;
     }
 }
@@ -60,28 +61,8 @@ void main (void)
 {
     init_leds();
     init_errcon();
-    /* Test assert - REMOVE IN FUTURE LABS */
-    char *array;
-    uint32_t i = 1;
-    extern int __heap_start, *__brkval;
-    int v;
-    array = malloc( i * sizeof(char));
-    assert(array);
-    /* End test assert */
 
     while (1) {
         blink_leds();
-        //_delay_ms(BLINK_DELAY_MS);
-        /* Test assert - REMOVE IN FUTURE LABS */
-        /*
-         * Increase memory allocated for array by 100 chars
-         * until we have eaten it all and print space between stack and heap.
-         * That is how assert works in run-time.
-         */
-        array = realloc( array, (i++ * 100) * sizeof(char));
-        fprintf(stderr, "%d\n",
-                (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval));
-        assert(array);
-        /* End test assert */
     }
 }
