@@ -1,6 +1,5 @@
 #include <stdio.h>
-#define __ASSERT_USE_STDERR
-#include <assert.h>
+#include <stdlib.h>
 #include <avr/io.h>
 #include <util/delay.h>
 #include "uart.h"
@@ -34,7 +33,7 @@ static inline void init_errcon(void)
 }
 
 
-static inline void init_uart0(void) 
+static inline void init_uart0(void)
 {
     simple_uart0_init();
     stdout = stdin = &simple_uart0_io;
@@ -67,6 +66,13 @@ static inline void blink_leds(void)
     }
 }
 
+void display_msg(char* msg)
+{
+    lcd_clr(64, 16);
+    lcd_goto(LCD_ROW_2_START);
+    lcd_puts(msg);
+}
+
 
 void main (void)
 {
@@ -75,38 +81,32 @@ void main (void)
     init_uart0();
     lcd_init();
     lcd_home();
-        
     unsigned char char_array[128];
 
-    for (unsigned char i = 0; i < sizeof(char_array); i++) 
-    {
+    for (unsigned char i = 0; i < sizeof(char_array); i++) {
         char_array[i] = i;
     }
 
     fprintf(stdout, "%s\n", my_name);
     print_ascii_tbl(stdout);
     print_for_human(stdout, char_array, sizeof(char_array));
-
     lcd_puts(my_name);
 
     while (1) {
         blink_leds();
-
         int input;
         fprintf(stdout, "\nEnter number > ");
         fscanf(stdin, "%s", &input);
         fprintf(stdout, "%s\n", &input);
 
-        if (input > 57 || input < 48)
-        {
-            fprintf(stdout, "Please enter number between 0 and 9!\n");
-        }
-        else 
-        {
-            fprintf(stdout, "You entered number %s.\n", lookup_list[input-48]);
-            lcd_clr(64, 16);
-            lcd_goto(LCD_ROW_2_START);
-            lcd_puts(lookup_list[input-48]);
+        if (input > 57 || input < 48) {
+            char* msg = "Please enter number between 0 and 9!";
+            fprintf(stdout, "%s\n", msg);
+            display_msg(not_valid_input_msg);
+        } else {
+            char* word = lookup_list[input - 48];
+            fprintf(stdout, "You entered number %s.\n", word);
+            display_msg(word);
         }
     }
 }
