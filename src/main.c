@@ -26,10 +26,8 @@ static inline void init_errcon(void)
 {
     simple_uart1_init();
     stderr = &simple_uart1_out;
-    fprintf(stderr, "Version: %s built on: %s %s\n",
-            FW_VERSION, __DATE__, __TIME__);
-    fprintf(stderr, "avr-libc version: %s avr-gcc version: %s\n",
-            __AVR_LIBC_VERSION_STRING__, __VERSION__);
+    fprintf_P(stderr, version_info);
+    fprintf_P(stderr, avr_info);
 }
 
 
@@ -66,15 +64,16 @@ static inline void blink_leds(void)
     }
 }
 
-void display_msg(char* msg)
+
+void display_msg(PGM_P msg)
 {
     lcd_clr(64, 16);
     lcd_goto(LCD_ROW_2_START);
-    lcd_puts(msg);
+    lcd_puts_P(msg);
 }
 
 
-void main (void)
+void main(void)
 {
     init_leds();
     init_errcon();
@@ -87,25 +86,27 @@ void main (void)
         char_array[i] = i;
     }
 
-    fprintf(stdout, "%s\n", my_name);
+    fprintf_P(stdout, my_name);
+    fprintf(stdout, "\n");
     print_ascii_tbl(stdout);
     print_for_human(stdout, char_array, sizeof(char_array));
-    lcd_puts(my_name);
+    lcd_puts_P(my_name);
 
     while (1) {
         blink_leds();
         int input;
-        fprintf(stdout, "\nEnter number > ");
+        fprintf_P(stdout, enter_input_msg);
         fscanf(stdin, "%s", &input);
         fprintf(stdout, "%s\n", &input);
 
         if (input > 57 || input < 48) {
-            char* msg = "Please enter number between 0 and 9!";
-            fprintf(stdout, "%s\n", msg);
-            display_msg(not_valid_input_msg);
+            fprintf_P(stdout, not_valid_input_msg);
+            display_msg(not_valid_input_LCD_msg);
         } else {
-            char* word = lookup_list[input - 48];
-            fprintf(stdout, "You entered number %s.\n", word);
+            PGM_P word = (PGM_P)pgm_read_word(&(lookup_list[input - 48]));
+            fprintf_P(stdout, result_msg);
+            fprintf_P(stdout, word);
+            fprintf(stdout, ".\n");
             display_msg(word);
         }
     }
