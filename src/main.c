@@ -1,21 +1,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <avr/io.h>
-//#include <avr/pgmspace.h>
+#include <avr/pgmspace.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
 #include <util/atomic.h>
-#include "uart.h"
 #include "hmi_msg.h"
 #include "print_helper.h"
 #include "../lib/hd44780_111/hd44780.h"
 #include "../lib/andygock_avr-uart/uart.h"
 
-
+#define UART_BAUD           9600
+#define UART_STATUS_MASK    0x00FF
 #define BLINK_DELAY_MS 1000
 #define COUNT_SECONDS
 #define ASCII_PRINT
-
 
 volatile uint32_t counter;
 
@@ -30,17 +29,15 @@ static inline void init_leds(void)
 /* Init error console as stderr in UART1 and print user code info */
 static inline void init_errcon(void)
 {
-    simple_uart1_init();
-    stderr = &simple_uart1_out;
-    fprintf_P(stderr, version_info);
-    fprintf_P(stderr, avr_info);
+    uart1_init(UART_BAUD_SELECT(UART_BAUD, F_CPU));
+    uart1_puts_p(version_info);
+    uart1_puts_p(avr_info);
 }
 
 
-static inline void init_uart0(void)
+static inline void init_con_uart0(void)
 {
-    simple_uart0_init();
-    stdout = stdin = &simple_uart0_io;
+    uart0_init(UART_BAUD_SELECT(UART_BAUD, F_CPU));
 }
 
 
@@ -67,12 +64,16 @@ static inline void heartbeat(void)
 {
     static uint32_t prev_time;
     uint32_t counter_cpy = 0;
+
     char ascii_buf[11] = {0x00};
-    ATOMIC_BLOCK(ATOMIC_FORCEON) {
+
+    ATOMIC_BLOCK(ATOMIC_FORCEON)
+    {
         counter_cpy = counter;
     }
 
-    if (prev_time != counter_cpy) {
+    if (prev_time != counter_cpy)
+    {
         ltoa(counter_cpy, ascii_buf, 10);
         uart1_puts_p(PSTR("Uptime: "));
         uart1_puts(ascii_buf);
@@ -95,9 +96,8 @@ void main(void)
 {
     init_leds();
     init_errcon();
-    init_uart0();
+    init_con_uart0();
     init_sys_timer();
-    simple_uart1_init();
     sei();
     lcd_init();
     lcd_home();
@@ -107,17 +107,17 @@ void main(void)
         char_array[i] = i;
     }
 
-    fprintf_P(stdout, my_name);
-    fprintf(stdout, "\n");
-    print_ascii_tbl(stdout);
-    print_for_human(stdout, char_array, sizeof(char_array));
+    uart0_puts_p(my_name);
+    uart0_puts_p(PSTR("\r\n"));
+    print_ascii_tbl();
+    print_for_human(char_array, sizeof(char_array));
     lcd_puts_P(my_name);
 
     while (1) {
         blink_led(PORTA0);
         heartbeat();
-        // int input;
-        // fprintf_P(stdout, enter_input_msg);
+        //int input;
+        uart0_puts_p(enter_input_msg);
         // fscanf(stdin, "%s", &input);
         // fprintf(stdout, "%s\n", &input);
         // if (input > 57 || input < 48) {
