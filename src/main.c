@@ -1,23 +1,29 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <avr/io.h>
+//#include <avr/pgmspace.h>
+#include <avr/interrupt.h>
 #include <util/delay.h>
+#include <util/atomic.h>
 #include "uart.h"
 #include "hmi_msg.h"
 #include "print_helper.h"
 #include "../lib/hd44780_111/hd44780.h"
+#include "../lib/andygock_avr-uart/uart.h"
 
 
-#define BLINK_DELAY_MS 300
+#define BLINK_DELAY_MS 1000
+#define COUNT_SECONDS
+#define ASCII_PRINT
 
+
+volatile uint32_t counter;
 
 static inline void init_leds(void)
 {
-    DDRB |= _BV(DDB0);
-    DDRB |= _BV(DDB1);
-    DDRB |= _BV(DDB2);
-    DDRB |= _BV(DDB5);
+    DDRA |= _BV(DDA0) | _BV(DDA2);
     DDRB |= _BV(DDB7);
+    PORTA &= ~(_BV(DDA0) | _BV(DDA2));
 }
 
 
@@ -38,29 +44,41 @@ static inline void init_uart0(void)
 }
 
 
+static inline void init_sys_timer(void)
+{
+    counter = 0;
+    TCCR1A = 0;
+    TCCR1B = 0;
+    TCCR1B |= _BV(WGM12);
+    TCCR1B |= _BV(CS12);
+    OCR1A = 62549;
+    TIMSK1 |= _BV(OCIE1A);
+}
+
+
 static inline void blink_led(char port)
 {
-    PORTB |= _BV(port);
-    _delay_ms(BLINK_DELAY_MS);
-    PORTB &= ~_BV(port);
+    PORTA ^= _BV(port);
     _delay_ms(BLINK_DELAY_MS);
 }
 
 
-static inline void blink_leds(void)
+static inline void heartbeat(void)
 {
-    switch (rand() % 3) {
-    case 0:
-        blink_led(PORTB0);
-        break;
+    static uint32_t prev_time;
+    uint32_t counter_cpy = 0;
+    char ascii_buf[11] = {0x00};
+    ATOMIC_BLOCK(ATOMIC_FORCEON) {
+        counter_cpy = counter;
+    }
 
-    case 1:
-        blink_led(PORTB1);
-        break;
-
-    case 2:
-        blink_led(PORTB2);
-        break;
+    if (prev_time != counter_cpy) {
+        ltoa(counter_cpy, ascii_buf, 10);
+        uart1_puts_p(PSTR("Uptime: "));
+        uart1_puts(ascii_buf);
+        uart1_puts_p(PSTR(" s.\r\n"));
+        PORTA ^= _BV(PORTA2);
+        prev_time = counter_cpy;
     }
 }
 
@@ -78,6 +96,9 @@ void main(void)
     init_leds();
     init_errcon();
     init_uart0();
+    init_sys_timer();
+    simple_uart1_init();
+    sei();
     lcd_init();
     lcd_home();
     unsigned char char_array[128];
@@ -93,21 +114,27 @@ void main(void)
     lcd_puts_P(my_name);
 
     while (1) {
-        blink_leds();
-        int input;
-        fprintf_P(stdout, enter_input_msg);
-        fscanf(stdin, "%s", &input);
-        fprintf(stdout, "%s\n", &input);
-
-        if (input > 57 || input < 48) {
-            fprintf_P(stdout, not_valid_input_msg);
-            display_msg(not_valid_input_LCD_msg);
-        } else {
-            PGM_P word = (PGM_P)pgm_read_word(&(lookup_list[input - 48]));
-            fprintf_P(stdout, result_msg);
-            fprintf_P(stdout, word);
-            fprintf(stdout, ".\n");
-            display_msg(word);
-        }
+        blink_led(PORTA0);
+        heartbeat();
+        // int input;
+        // fprintf_P(stdout, enter_input_msg);
+        // fscanf(stdin, "%s", &input);
+        // fprintf(stdout, "%s\n", &input);
+        // if (input > 57 || input < 48) {
+        //     fprintf_P(stdout, not_valid_input_msg);
+        //     display_msg(not_valid_input_LCD_msg);
+        // } else {
+        //     PGM_P word = (PGM_P)pgm_read_word(&(lookup_list[input - 48]));
+        //     fprintf_P(stdout, result_msg);
+        //     fprintf_P(stdout, word);
+        //     fprintf(stdout, ".\n");
+        //     display_msg(word);
+        // }
     }
+}
+
+
+ISR(TIMER1_COMPA_vect)
+{
+    counter++;
 }
