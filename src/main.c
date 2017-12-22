@@ -7,8 +7,10 @@
 #include <util/atomic.h>
 #include "hmi_msg.h"
 #include "print_helper.h"
+#include "cli_microrl.h"
 #include "../lib/hd44780_111/hd44780.h"
 #include "../lib/andygock_avr-uart/uart.h"
+#include "../lib/helius_microrl/microrl.h"
 
 #define UART_BAUD           9600
 #define UART_STATUS_MASK    0x00FF
@@ -18,6 +20,9 @@
 
 volatile uint32_t counter;
 
+microrl_t rl;
+microrl_t *prl = &rl;
+
 static inline void init_leds(void)
 {
     DDRA |= _BV(DDA0) | _BV(DDA2);
@@ -26,18 +31,18 @@ static inline void init_leds(void)
 }
 
 
-/* Init error console as stderr in UART1 and print user code info */
-static inline void init_errcon(void)
-{
-    uart1_init(UART_BAUD_SELECT(UART_BAUD, F_CPU));
-    uart1_puts_p(version_info);
-    uart1_puts_p(avr_info);
-}
-
-
-static inline void init_con_uart0(void)
+static inline void init_con_uarts(void)
 {
     uart0_init(UART_BAUD_SELECT(UART_BAUD, F_CPU));
+    uart1_init(UART_BAUD_SELECT(UART_BAUD, F_CPU));
+    uart0_puts_p(my_name);
+    uart0_puts_p(PSTR("\r\n"));
+    uart0_puts_p(enter_input_msg);
+    uart0_puts_p(PSTR("\r\n"));
+    uart1_puts_p(version_info);
+    uart1_puts_p(avr_info);
+    microrl_init(prl, uart0_puts);
+    microrl_set_execute_callback(prl, cli_execute);
 }
 
 
@@ -53,27 +58,16 @@ static inline void init_sys_timer(void)
 }
 
 
-static inline void blink_led(char port)
-{
-    PORTA ^= _BV(port);
-    _delay_ms(BLINK_DELAY_MS);
-}
-
-
 static inline void heartbeat(void)
 {
     static uint32_t prev_time;
     uint32_t counter_cpy = 0;
-
     char ascii_buf[11] = {0x00};
-
-    ATOMIC_BLOCK(ATOMIC_FORCEON)
-    {
+    ATOMIC_BLOCK(ATOMIC_FORCEON) {
         counter_cpy = counter;
     }
 
-    if (prev_time != counter_cpy)
-    {
+    if (prev_time != counter_cpy) {
         ltoa(counter_cpy, ascii_buf, 10);
         uart1_puts_p(PSTR("Uptime: "));
         uart1_puts(ascii_buf);
@@ -84,52 +78,19 @@ static inline void heartbeat(void)
 }
 
 
-void display_msg(PGM_P msg)
-{
-    lcd_clr(64, 16);
-    lcd_goto(LCD_ROW_2_START);
-    lcd_puts_P(msg);
-}
-
-
 void main(void)
 {
-    init_leds();
-    init_errcon();
-    init_con_uart0();
-    init_sys_timer();
-    sei();
     lcd_init();
     lcd_home();
-    unsigned char char_array[128];
-
-    for (unsigned char i = 0; i < sizeof(char_array); i++) {
-        char_array[i] = i;
-    }
-
-    uart0_puts_p(my_name);
-    uart0_puts_p(PSTR("\r\n"));
-    print_ascii_tbl();
-    print_for_human(char_array, sizeof(char_array));
     lcd_puts_P(my_name);
+    sei();
+    init_leds();
+    init_con_uarts();
+    init_sys_timer();
 
     while (1) {
-        blink_led(PORTA0);
         heartbeat();
-        //int input;
-        uart0_puts_p(enter_input_msg);
-        // fscanf(stdin, "%s", &input);
-        // fprintf(stdout, "%s\n", &input);
-        // if (input > 57 || input < 48) {
-        //     fprintf_P(stdout, not_valid_input_msg);
-        //     display_msg(not_valid_input_LCD_msg);
-        // } else {
-        //     PGM_P word = (PGM_P)pgm_read_word(&(lookup_list[input - 48]));
-        //     fprintf_P(stdout, result_msg);
-        //     fprintf_P(stdout, word);
-        //     fprintf(stdout, ".\n");
-        //     display_msg(word);
-        // }
+        microrl_insert_char(prl, (uart0_getc() & UART_STATUS_MASK));
     }
 }
 

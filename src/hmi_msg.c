@@ -2,8 +2,8 @@
 
 const char version_info[] PROGMEM = "Version: " FW_VERSION " built on: "
                                     __DATE__ " " __TIME__ "\n";
-const char avr_info[] PROGMEM = "avr-libc version: " __AVR_LIBC_VERSION_STRING__
-                                " avr-gcc version: " __VERSION__ "\n";
+const char avr_info[] PROGMEM = "avr-libc version: "
+                                __AVR_LIBC_VERSION_STRING__" avr-gcc version: " __VERSION__ "\n";
 
 const char my_name[] PROGMEM = "Anita Sepp";
 const char not_valid_input_LCD_msg[] PROGMEM = "Not valid number";

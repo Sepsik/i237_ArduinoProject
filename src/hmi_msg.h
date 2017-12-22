@@ -8,15 +8,3 @@ extern const char not_valid_input_msg[];
 extern const char result_msg[];
 
 extern PGM_P const lookup_list[];
-
-
-
-
-
-
-
-
-
-
-
-
