@@ -161,6 +161,7 @@
 		byte		size;			// Number of bytes in the UID. 4, 7 or 10.
 		byte		uidByte[10];
 		byte		sak;			// The SAK (Select acknowledge) byte returned from the PICC after successful selection.
+		byte 		bufferATQA[10];
 	} Uid;
 
 	// A struct used for passing a MIFARE Crypto1 key

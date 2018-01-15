@@ -11,12 +11,10 @@
 #include "../lib/hd44780_111/hd44780.h"
 #include "../lib/andygock_avr-uart/uart.h"
 #include "../lib/helius_microrl/microrl.h"
+#include "../lib/matejx_avr_lib/mfrc522.h"
 
 #define UART_BAUD           9600
 #define UART_STATUS_MASK    0x00FF
-#define BLINK_DELAY_MS 1000
-#define COUNT_SECONDS
-#define ASCII_PRINT
 
 volatile uint32_t counter;
 
@@ -37,7 +35,6 @@ static inline void init_con_uarts(void)
     uart1_init(UART_BAUD_SELECT(UART_BAUD, F_CPU));
     uart0_puts_p(my_name);
     uart0_puts_p(PSTR("\r\n"));
-    uart0_puts_p(enter_input_msg);
     uart0_puts_p(PSTR("\r\n"));
     uart1_puts_p(version_info);
     uart1_puts_p(avr_info);
@@ -78,6 +75,14 @@ static inline void heartbeat(void)
 }
 
 
+static inline void init_rfid_reader(void)
+{
+    /* Init RFID-RC522 */
+    MFRC522_init();
+    PCD_Init();
+}
+
+
 void main(void)
 {
     lcd_init();
@@ -87,6 +92,7 @@ void main(void)
     init_leds();
     init_con_uarts();
     init_sys_timer();
+    init_rfid_reader();
 
     while (1) {
         heartbeat();
