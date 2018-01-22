@@ -50,6 +50,8 @@ const char add_help[] PROGMEM =
     "Add RFID card. Usage: add <name> <RFID card number>";
 const char print_cmd[] PROGMEM = "print";
 const char print_help[] PROGMEM = "Print all RFID cards";
+const char remove_cmd[] PROGMEM = "remove";
+const char remove_help[] PROGMEM = "Remove RFID card. Usage: remove <RFID card number>";
 
 const cli_cmd_t cli_cmds[] = {
     {help_cmd, help_help, cli_print_help, 0},
@@ -59,7 +61,7 @@ const cli_cmd_t cli_cmds[] = {
     {number_cmd, number_help, cli_handle_number, 1},
     {read_cmd, read_help, rfid_card_read, 0},
     {add_cmd, add_help, rfid_card_add, 2},
-    //{remove_cmd, remove_help, rfid_card_remove, 0},
+    {remove_cmd, remove_help, rfid_card_remove, 1},
     {print_cmd, print_help, rfid_card_print_list, 0},
     //{process_cmd, process_help, rfid_process_card, 0},
     //{disp_cmd, disp_help, rfid_handle_door_and_disp, 0},

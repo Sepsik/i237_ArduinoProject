@@ -79,7 +79,7 @@ card_t *create_card(const char *name, const char *input_uid, const int length)
     card_list_t *current = list_head_ptr;
 
     while (current != NULL) {
-        if (memcmp(current->card->uid, bytes, length / 2) == 0) {
+        if (memcmp(current->card->uid, bytes, current->card->size) == 0) {
             uart0_puts_p(PSTR("This card is already in use.\r\n"));
             return 0;
         }
@@ -131,6 +131,41 @@ void push_card(card_list_t *list_head_ptr, card_t *card)
     current->next->next = NULL;
 }
 
+void remove_card(const char *input_uid, card_list_t **list_head_ptr) {
+    card_list_t *current = *list_head_ptr;
+    card_list_t *prev = NULL;
+
+    uint8_t *bytes = malloc((strlen(input_uid)/2) * sizeof(uint8_t));
+    tallymarker_hextobin(input_uid, bytes, strlen(input_uid));
+
+     while (current != NULL) {
+        if (memcmp(current->card->uid, bytes, current->card->size) == 0) {
+            if (prev == NULL) {
+                *list_head_ptr = current->next;
+            } else {
+                prev->next = current->next;
+            }
+        
+            uart0_puts_p(PSTR("Card with UID: "));
+            uart0_puts(input_uid);
+            uart0_puts_p(PSTR(" is removed."));
+            uart0_puts_p(PSTR("\r\n"));
+
+            free(current->card->name);
+            free(current->card->uid);
+            free(current);
+            return;
+        }
+
+        prev = current;
+        current = current->next;
+    }
+
+    uart0_puts_p(PSTR("Card with UID: "));
+    uart0_puts(input_uid);
+    uart0_puts_p(PSTR(" is not in list."));
+}
+
 
 void rfid_card_read(const char *const *argv)
 {
@@ -176,6 +211,17 @@ void rfid_card_add(const char *const *argv)
         push_card(list_head_ptr, card_ptr);
     } else {
         uart0_puts_p(PSTR("Adding card failed.\r\n"));
+    }
+}
+
+void rfid_card_remove(const char *const *argv)
+{
+    if (list_head_ptr == 0) {
+        uart0_puts_p(PSTR("There are no cards in the list."));
+        uart0_puts_p(PSTR("\r\n"));
+    }
+    else {
+        remove_card(argv[1], &list_head_ptr);
     }
 }
 
