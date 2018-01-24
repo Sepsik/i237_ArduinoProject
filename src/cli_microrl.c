@@ -6,6 +6,7 @@
 #include "../lib/hd44780_111/hd44780.h"
 #include "../lib/andygock_avr-uart/uart.h"
 #include "../lib/helius_microrl/microrl.h"
+#include "../lib/andy_brown_memdebug/memdebug.h"
 #include "hmi_msg.h"
 #include "cli_microrl.h"
 #include "print_helper.h"
@@ -29,6 +30,7 @@ void cli_print_ascii_tbls(const char *const *argv);
 void cli_handle_number(const char *const *argv);
 void cli_print_cmd_error(void);
 void cli_print_cmd_arg_error(void);
+void cli_mem_stat(const char *const *argv);
 
 
 const char help_cmd[] PROGMEM = "help";
@@ -51,7 +53,11 @@ const char add_help[] PROGMEM =
 const char print_cmd[] PROGMEM = "print";
 const char print_help[] PROGMEM = "Print all RFID cards";
 const char remove_cmd[] PROGMEM = "remove";
-const char remove_help[] PROGMEM = "Remove RFID card. Usage: remove <RFID card number>";
+const char remove_help[] PROGMEM =
+    "Remove RFID card. Usage: remove <RFID card number>";
+const char mem_stat_cmd[] PROGMEM = "mem";
+const char mem_stat_help[] PROGMEM =
+    "Print memory usage and change compared to previous call";
 
 const cli_cmd_t cli_cmds[] = {
     {help_cmd, help_help, cli_print_help, 0},
@@ -63,8 +69,7 @@ const cli_cmd_t cli_cmds[] = {
     {add_cmd, add_help, rfid_card_add, 2},
     {remove_cmd, remove_help, rfid_card_remove, 1},
     {print_cmd, print_help, rfid_card_print_list, 0},
-    //{process_cmd, process_help, rfid_process_card, 0},
-    //{disp_cmd, disp_help, rfid_handle_door_and_disp, 0},
+    {mem_stat_cmd, mem_stat_help, cli_mem_stat, 0},
 };
 
 
@@ -186,4 +191,40 @@ int cli_execute(int argc, const char *const *argv)
 
     cli_print_cmd_error();
     return 0;
+}
+
+void cli_mem_stat(const char *const * argv)
+{
+    (void) argv;
+    char print_buf[256] = {0x00};
+    extern int __heap_start, *__brkval;
+    int v;
+    int space;
+    static int prev_space;
+    space = (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval);
+    uart0_puts_p(PSTR("Heap statistics\r\n"));
+    sprintf_P(print_buf, PSTR("Used: %u\r\nFree: %u\r\n"), getMemoryUsed(),
+              getFreeMemory());
+    uart0_puts(print_buf);
+    uart0_puts_p(PSTR("\r\nSpace between stack and heap:\r\n"));
+    sprintf_P(print_buf, PSTR("Current  %d\r\nPrevious %d\r\nChange   %d\r\n"),
+              space, prev_space, space - prev_space);
+    uart0_puts(print_buf);
+    uart0_puts_p(PSTR("\r\nFreelist\r\n"));
+    sprintf_P(print_buf, PSTR("Freelist size:             %u\r\n"),
+              getFreeListSize());
+    uart0_puts(print_buf);
+    sprintf_P(print_buf, PSTR("Blocks in freelist:        %u\r\n"),
+              getNumberOfBlocksInFreeList());
+    uart0_puts(print_buf);
+    sprintf_P(print_buf, PSTR("Largest block in freelist: %u\r\n"),
+              getLargestBlockInFreeList());
+    uart0_puts(print_buf);
+    sprintf_P(print_buf, PSTR("Largest freelist block:    %u\r\n"),
+              getLargestAvailableMemoryBlock());
+    uart0_puts(print_buf);
+    sprintf_P(print_buf, PSTR("Largest allocable block:   %u\r\n"),
+              getLargestNonFreeListBlock());
+    uart0_puts(print_buf);
+    prev_space = space;
 }

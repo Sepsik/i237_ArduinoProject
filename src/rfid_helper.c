@@ -6,7 +6,13 @@
 #include "rfid_helper.h"
 #include "../lib/andygock_avr-uart/uart.h"
 #include "../lib/matejx_avr_lib/mfrc522.h"
+#include "../lib/hd44780_111/hd44780.h"
+#include <avr/wdt.h>
 
+#define DOOR_ACCESS_DENIED "Access denied"
+#define LED_RED PORTA0
+
+extern uint32_t counter;
 
 typedef unsigned int id_t;
 
@@ -16,16 +22,38 @@ typedef struct card {
     int size;
 } card_t;
 
-
 typedef struct card_list {
     id_t card_id;
     card_t *card;
     struct card_list *next;
 } card_list_t;
 
+typedef enum {
+    door_opening,
+    door_open,
+    door_closing,
+    door_closed
+} door_state_t;
+
+typedef enum {
+    display_name,
+    display_access_denied,
+    display_clear,
+    clear_name,
+    display_no_update,
+} display_state_t;
+
+
 card_list_t *list_head_ptr;
 card_t *card_ptr;
 char print_buf[256] = {0x00};
+char lcd_buf[16] = {0x00};
+char *display_name_str;
+uint8_t *saved_uid;
+door_state_t door_state = door_closed;
+display_state_t display_state = display_no_update;
+uint32_t door_closing_time_helper, repeating_card_time_helper,
+         msg_display_time_helper, name_display_time_helper;
 
 
 id_t get_id(void)
@@ -131,26 +159,25 @@ void push_card(card_list_t *list_head_ptr, card_t *card)
     current->next->next = NULL;
 }
 
-void remove_card(const char *input_uid, card_list_t **list_head_ptr) {
+void remove_card(const char *input_uid, card_list_t **list_head_ptr)
+{
     card_list_t *current = *list_head_ptr;
     card_list_t *prev = NULL;
-
-    uint8_t *bytes = malloc((strlen(input_uid)/2) * sizeof(uint8_t));
+    uint8_t *bytes = malloc((strlen(input_uid) / 2) * sizeof(uint8_t));
     tallymarker_hextobin(input_uid, bytes, strlen(input_uid));
 
-     while (current != NULL) {
+    while (current != NULL) {
         if (memcmp(current->card->uid, bytes, current->card->size) == 0) {
             if (prev == NULL) {
                 *list_head_ptr = current->next;
             } else {
                 prev->next = current->next;
             }
-        
+
             uart0_puts_p(PSTR("Card with UID: "));
             uart0_puts(input_uid);
             uart0_puts_p(PSTR(" is removed."));
             uart0_puts_p(PSTR("\r\n"));
-
             free(current->card->name);
             free(current->card->uid);
             free(current);
@@ -219,8 +246,7 @@ void rfid_card_remove(const char *const *argv)
     if (list_head_ptr == 0) {
         uart0_puts_p(PSTR("There are no cards in the list."));
         uart0_puts_p(PSTR("\r\n"));
-    }
-    else {
+    } else {
         remove_card(argv[1], &list_head_ptr);
     }
 }
@@ -231,7 +257,7 @@ void rfid_card_print_list(const char *const *argv)
     (void) argv;
     card_list_t *current = list_head_ptr;
 
-    if (current == 0) {
+    if (current == NULL) {
         uart0_puts_p(PSTR("There are no cards in the list."));
         uart0_puts_p(PSTR("\r\n"));
     } else {
@@ -251,5 +277,135 @@ void rfid_card_print_list(const char *const *argv)
             uart0_puts_p(PSTR("\r\n\r\n"));
             current = current->next;
         }
+    }
+}
+
+
+char *get_cardholder_name(Uid uid)
+{
+    card_list_t *current = list_head_ptr;
+
+    while (current != NULL) {
+        if (memcmp(uid.uidByte, current->card->uid, uid.size) == 0) {
+            return current->card->name;
+        }
+
+        current = current->next;
+    }
+
+    return NULL;
+}
+
+
+bool is_repeating_card(Uid uid)
+{
+    return saved_uid && memcmp(uid.uidByte, saved_uid, uid.size) == 0;
+}
+
+
+void remember_uid (Uid uid)
+{
+    saved_uid = realloc(saved_uid, sizeof(uid.uidByte));
+    memcpy(saved_uid, uid.uidByte, sizeof(uid.uidByte));
+    repeating_card_time_helper = counter;
+}
+
+
+void rfid_process_card(void)
+{
+    Uid uid;
+
+    if (PICC_IsNewCardPresent()) {
+        PICC_ReadCardSerial(&uid);
+
+        if (!is_repeating_card(uid)) {
+            remember_uid(uid);
+
+            if (get_cardholder_name(uid) != NULL) {
+                display_name_str = get_cardholder_name(uid);
+                door_state = door_opening;
+                display_state = display_name;
+            } else {
+                door_state = door_closing;
+                display_state = display_access_denied;
+            }
+        }
+    }
+
+    if (repeating_card_time_helper && (counter - repeating_card_time_helper >= 3)) {
+        free(saved_uid);
+        saved_uid = NULL;
+        repeating_card_time_helper = 0;
+    }
+
+    switch (door_state) {
+    case door_opening:
+        PORTA ^= _BV(LED_RED);
+        door_closing_time_helper = counter;
+        door_state = door_open;
+        break;
+
+    case door_open:
+        if (counter - door_closing_time_helper >= 2) {
+            door_state = door_closing;
+        }
+
+        break;
+
+    case door_closing:
+        door_state = door_closed;
+        break;
+
+    case door_closed:
+        PORTA &= ~_BV(LED_RED);
+        break;
+    }
+
+    switch (display_state) {
+    case display_name:
+        lcd_clr(LCD_ROW_2_START, LCD_VISIBLE_COLS);
+        lcd_goto(LCD_ROW_2_START);
+
+        if (display_name_str != NULL) {
+            name_display_time_helper = counter;
+            strncpy(lcd_buf, display_name_str, LCD_VISIBLE_COLS);
+            lcd_puts(lcd_buf);
+        } else {
+            msg_display_time_helper = counter;
+            lcd_puts_P(PSTR("Name read error"));
+        }
+
+        display_state = clear_name;
+        display_state = display_clear;
+        break;
+
+    case display_access_denied:
+        msg_display_time_helper = counter;
+        lcd_clr(LCD_ROW_2_START, LCD_VISIBLE_COLS);
+        lcd_goto(LCD_ROW_2_START);
+        lcd_puts_P(PSTR(DOOR_ACCESS_DENIED));
+        display_state = display_clear;
+        break;
+
+    case display_clear:
+        if (msg_display_time_helper && (counter - msg_display_time_helper >= 5)) {
+            lcd_clr(LCD_ROW_2_START, LCD_VISIBLE_COLS);
+            display_state = display_no_update;
+            msg_display_time_helper = 0;
+        }
+
+        break;
+
+    case clear_name:
+        while (counter - name_display_time_helper < 3) {
+        }
+
+        lcd_clr(LCD_ROW_2_START, LCD_VISIBLE_COLS);
+        display_state = display_no_update;
+        name_display_time_helper = 0;
+        break;
+
+    case display_no_update:
+        break;
     }
 }

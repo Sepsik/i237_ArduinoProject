@@ -8,6 +8,7 @@
 #include "hmi_msg.h"
 #include "print_helper.h"
 #include "cli_microrl.h"
+#include "rfid_helper.h"
 #include "../lib/hd44780_111/hd44780.h"
 #include "../lib/andygock_avr-uart/uart.h"
 #include "../lib/helius_microrl/microrl.h"
@@ -16,6 +17,9 @@
 #define UART_BAUD           9600
 #define UART_STATUS_MASK    0x00FF
 
+#define LED_RED         PORTA0
+#define LED_GREEN       PORTA2
+
 volatile uint32_t counter;
 
 microrl_t rl;
@@ -23,9 +27,9 @@ microrl_t *prl = &rl;
 
 static inline void init_leds(void)
 {
-    DDRA |= _BV(DDA0) | _BV(DDA2);
+    DDRA |= _BV(LED_RED) | _BV(LED_GREEN);
     DDRB |= _BV(DDB7);
-    PORTA &= ~(_BV(DDA0) | _BV(DDA2));
+    PORTA &= ~(_BV(LED_RED) | _BV(LED_GREEN));
 }
 
 
@@ -69,7 +73,7 @@ static inline void heartbeat(void)
         uart1_puts_p(PSTR("Uptime: "));
         uart1_puts(ascii_buf);
         uart1_puts_p(PSTR(" s.\r\n"));
-        PORTA ^= _BV(PORTA2);
+        //PORTA ^= _BV(LED_GREEN);
         prev_time = counter_cpy;
     }
 }
@@ -96,6 +100,7 @@ void main(void)
 
     while (1) {
         heartbeat();
+        rfid_process_card();
         microrl_insert_char(prl, (uart0_getc() & UART_STATUS_MASK));
     }
 }
